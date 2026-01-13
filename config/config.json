@@ -1,0 +1,31 @@
+{
+  "prefixes": {
+    "general": "?",
+    "mod": "!",
+    "util": "/"
+  },
+
+  "channels": {
+    "welcome": "1452393625211109498",
+    "leveling": "1457486352080961699",
+    "rules": "1457414364071198781",
+    "general": "1365136971848220754"
+  },
+
+  "xp": {
+    "enabled": true,
+    "messageXp": 5,
+    "cooldownSeconds": 60,
+    "levelUpChannel": "1457486352080961699"
+  },
+
+  "welcome": {
+    "enabled": true,
+    "channel": "1452393625211109498",
+    "message": "Everyone welcome {user} to the server!"
+  },
+
+  "features": {
+    "levelUpMessages": true
+  }
+}
