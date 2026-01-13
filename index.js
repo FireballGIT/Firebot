@@ -17,6 +17,8 @@ const logger = {
   error: (msg) => console.error(`[ERROR] ${msg}`)
 };
 
+console.log("RAW TOKEN: ", process.env.BOT_TOKEN);
+
 // Create Discord client
 const client = new Client({
   intents: [
