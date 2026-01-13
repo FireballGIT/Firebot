@@ -1,81 +1,116 @@
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
-const fs = require("fs");
-const path = require("path");
-const config = require("./config/config.json");
-const logger = require("./utils/logger");
+// ======================
+// Firebot Main File
+// ======================
 
-// Create client
+// Load environment variables
+require('dotenv').config();
+
+const fs = require('fs');
+const path = require('path');
+const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+
+// Logger
+const logger = {
+  info: (msg) => console.log(`[INFO] ${msg}`),
+  success: (msg) => console.log(`[SUCCESS] ${msg}`),
+  warn: (msg) => console.warn(`[WARN] ${msg}`),
+  error: (msg) => console.error(`[ERROR] ${msg}`)
+};
+
+// Create Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
-  ]
+    GatewayIntentBits.MessageContent
+  ],
+  partials: [Partials.Channel, Partials.Message]
 });
 
-// Command collections
-client.commands = {
-  general: new Collection(), // ?
-  mod: new Collection(),     // !
-  util: new Collection()     // /
-};
+// Collections for commands
+client.commands = new Collection();
+client.utilCommands = new Collection();
 
-// Attach config
-client.config = config;
-
-// ===== LOAD COMMANDS =====
-const commandFolders = [
-  { name: "general", prefix: config.prefixes.general },
-  { name: "mod", prefix: config.prefixes.mod },
-  { name: "util", prefix: config.prefixes.util }
-];
-
+// Load commands dynamically
+const commandFolders = ['general', 'mod', 'util'];
 for (const folder of commandFolders) {
-  const folderPath = path.join(__dirname, "commands", folder.name);
+  const folderPath = path.join(__dirname, 'commands', folder);
   if (!fs.existsSync(folderPath)) continue;
 
-  const commandFiles = fs
-    .readdirSync(folderPath)
-    .filter(file => file.endsWith(".js"));
-
+  const commandFiles = fs.readdirSync(folderPath).filter(f => f.endsWith('.js'));
   for (const file of commandFiles) {
-    const filePath = path.join(folderPath, file);
-    const command = require(filePath);
-
-    if (!command.name || typeof command.execute !== "function") {
-      logger.warn(`Invalid command file: ${file}`);
-      continue;
+    const command = require(path.join(folderPath, file));
+    if (folder === 'util') {
+      client.utilCommands.set(command.name, command);
+    } else {
+      client.commands.set(command.name, command);
     }
-
-    client.commands[folder.name].set(command.name, command);
-    logger.info(`Loaded ${folder.prefix}${command.name}`);
+    logger.info(`Loaded command ${command.name} from ${folder}`);
   }
 }
 
-// ===== LOAD EVENTS =====
-const eventsPath = path.join(__dirname, "events");
-const eventFiles = fs
-  .readdirSync(eventsPath)
-  .filter(file => file.endsWith(".js"));
-
+// Load events dynamically
+const eventsPath = path.join(__dirname, 'events');
+const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
 for (const file of eventFiles) {
-  const filePath = path.join(eventsPath, file);
-  const event = require(filePath);
+  const event = require(path.join(eventsPath, file));
+  const eventName = file.split('.')[0];
 
   if (event.once) {
-    client.once(event.name, (...args) => event.execute(client, ...args));
+    client.once(eventName, (...args) => event.execute(client, ...args));
   } else {
-    client.on(event.name, (...args) => event.execute(client, ...args));
+    client.on(eventName, (...args) => event.execute(client, ...args));
   }
-
-  logger.info(`Event loaded: ${event.name}`);
+  logger.info(`Loaded event ${eventName}`);
 }
 
-// ===== READY =====
-client.once("ready", () => {
-  logger.success(`🔥 Logged in as ${client.user.tag}`);
+// Simple XP system (basic)
+client.xp = new Map();
+
+client.on('messageCreate', message => {
+  if (message.author.bot) return;
+
+  const now = Date.now();
+  const cooldown = 60 * 1000; // 60s
+  const userId = message.author.id;
+
+  if (!client.xp.has(userId)) {
+    client.xp.set(userId, { xp: 0, lastMessage: 0, level: 0 });
+  }
+
+  const userData = client.xp.get(userId);
+  if (now - userData.lastMessage >= cooldown) {
+    userData.xp += 5;
+    userData.lastMessage = now;
+
+    // Level up example: level threshold = 100 XP
+    const levelThreshold = (userData.level + 1) * 100;
+    if (userData.xp >= levelThreshold) {
+      userData.level += 1;
+      const levelUpChannelId = require('./config/config.json').channels.leveling;
+      const channel = message.guild.channels.cache.get(levelUpChannelId);
+      if (channel) {
+        channel.send(`OH MY GOD!!! <@${userId}>!!! YOU JUST REACHED LEVEL ${userData.level}!!!`);
+      }
+    }
+    client.xp.set(userId, userData);
+  }
 });
 
-// ===== LOGIN =====
-client.login("MTQ1MjM4MTYyMjYzMTQwMzczNA.GSz_R8.zh__RcopDA1Cs1viHdV0pN-DcjEAXxYLg5nGA0");
+// Welcome new members
+client.on('guildMemberAdd', member => {
+  const welcomeConfig = require('./config/config.json').welcome;
+  if (!welcomeConfig.enabled) return;
+
+  const channel = member.guild.channels.cache.get(welcomeConfig.channel);
+  if (!channel) return;
+
+  const msg = welcomeConfig.message.replace('{user}', `<@${member.id}>`);
+  channel.send(msg);
+});
+
+// Login
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => logger.success(`Logged in as ${client.user.tag}`))
+  .catch(err => logger.error(`Login failed: ${err}`));
