@@ -113,6 +113,6 @@ client.on('guildMemberAdd', member => {
 });
 
 // Login
-client.login(process.env.DISCORD_TOKEN)
+client.login(process.env.BOT_TOKEN)
   .then(() => logger.success(`Logged in as ${client.user.tag}`))
   .catch(err => logger.error(`Login failed: ${err}`));
